@@ -23,7 +23,7 @@ import (
 const UninitializedChannel = 0
 
 type Channel struct {
-	channel C.MCHANDLE
+	channel Handle
 	handler func(*C.MCSIGNALINFO)
 }
 
@@ -38,10 +38,14 @@ func (c *Channel) Create() error {
 		return ErrInvalidChannel
 	}
 
-	status := C.McCreate(C.MC_CHANNEL, &c.channel)
+	var ch C.uint
+
+	status := C.McCreate(C.MC_CHANNEL, &ch)
 	if status != C.MC_OK {
 		return ErrCannotCreateChannel
 	}
+
+	c.channel = Handle(ch)
 
 	return nil
 }
@@ -52,7 +56,7 @@ func (c *Channel) Delete() error {
 		return ErrInvalidChannel
 	}
 
-	status := C.McDelete(c.channel)
+	status := C.McDelete(C.uint(c.channel))
 	if status != C.MC_OK {
 		return ErrCannotDeleteChannel
 	}
@@ -85,7 +89,7 @@ func (c *Channel) GetParamInt(id ParamID) (int, error) {
 func (c *Channel) RegisterCallback(handler func(*C.MCSIGNALINFO)) error {
 	c.handler = handler
 
-	status := C.SetCallbackHandler(c.channel)
+	status := C.SetCallbackHandler(C.uint(c.channel))
 	if status != C.MC_OK {
 		return ErrCannotRegisterCallback
 	}
