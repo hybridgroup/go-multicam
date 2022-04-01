@@ -24,6 +24,8 @@ const UninitializedChannel = 0
 
 type SignalInfo C.MCSIGNALINFO
 
+var channelCallbackHandlers []func(*SignalInfo)
+
 type Channel struct {
 	channel Handle
 	handler func(*SignalInfo)
@@ -96,12 +98,23 @@ func (c *Channel) RegisterCallback(handler func(*SignalInfo)) error {
 		return ErrCannotRegisterCallback
 	}
 
+	// TODO(re): allow for separate handlers per channel
+	if len(channelCallbackHandlers) == 0 {
+		channelCallbackHandlers = append(channelCallbackHandlers, handler)
+	}
+
 	return nil
 }
 
 //export GoCallbackHandler
 func GoCallbackHandler(info *SignalInfo) {
-	fmt.Println("callback received")
-	// TODO: use SignalInfo to determine which channel callback it is.
+	fmt.Println("callback received from", info.Signal)
+
+	// TODO(re): allow for separate handlers per channel
+	if len(channelCallbackHandlers) > 0 && channelCallbackHandlers[0] != nil {
+		channelCallbackHandlers[0](info)
+		return
+	}
+
 	return
 }

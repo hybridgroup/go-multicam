@@ -2,7 +2,13 @@ package main
 
 import (
 	"fmt"
+	"image"
+	"image/jpeg"
+	"os"
+	"reflect"
+	"strings"
 	"time"
+	"unsafe"
 
 	mc "github.com/northvolt/go-multicam"
 )
@@ -37,24 +43,21 @@ func main() {
 
 	SetupCamera()
 
-	// TODO: Register our Callback function for the MultiCam asynchronous signals.
-	// status = McRegisterCallback(hChannel, McCallback, NULL);
 	ch.RegisterCallback(cbhandler)
 
 	// MC_SIG_SURFACE_PROCESSING: acquisition done and locked for processing
-	// MC_SIG_ACQUISITION_FAILURE: acquisition failed.
 	if err := ch.SetParamInt(mc.SignalEnableParam+mc.SurfaceProcessingSignal, mc.SignalEnableOn); err != nil {
 		fmt.Println(err)
 		return
 	}
 
+	// MC_SIG_ACQUISITION_FAILURE: acquisition failed.
 	if err := ch.SetParamInt(mc.SignalEnableParam+mc.AcquisitionFailureSignal, mc.SignalEnableOn); err != nil {
 		fmt.Println(err)
 		return
 	}
 
 	// Start Acquisitions for this channel.
-	// status = McSetParamInt(hChannel, MC_ChannelState, MC_ChannelState_ACTIVE);
 	if err := ch.SetParamInt(mc.ChannelStateParam, int(mc.ChannelStateActive)); err != nil {
 		fmt.Println(err)
 		return
@@ -128,5 +131,52 @@ func SetupCamera() {
 }
 
 func cbhandler(info *mc.SignalInfo) {
-	fmt.Println("doing it")
+	switch mc.ParamID(info.Signal) {
+	case mc.SurfaceProcessingSignal:
+		pimg, err := mc.GetParamPtr(mc.Handle(info.SignalInfo), mc.SurfaceAddrParam)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		fmt.Println("frame received at address", pimg)
+		h := &reflect.SliceHeader{
+			Data: uintptr(pimg),
+			Len:  int(x * y),
+			Cap:  int(x * y),
+		}
+		ptr := *(*[]byte)(unsafe.Pointer(h))
+
+		img := image.NewGray(image.Rect(0, 0, x, y))
+		img.Pix = ptr
+
+		saveImage(img)
+	case mc.AcquisitionFailureSignal:
+		fmt.Println("frame error")
+	default:
+		fmt.Println("other error")
+	}
+}
+
+func saveImage(img *image.Gray) {
+	f, err := os.Create(filename(time.Now()) + ".jpg")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer f.Close()
+
+	opt := jpeg.Options{
+		Quality: 90,
+	}
+	err = jpeg.Encode(f, img, &opt)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+}
+
+func filename(t time.Time) string {
+	id := t.UTC().Format(time.RFC3339Nano)
+	id = strings.ReplaceAll(id, ":", "-")
+	return id
 }
