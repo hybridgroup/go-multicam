@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	mc "github.com/northvolt/go-multicam"
 )
@@ -38,15 +39,37 @@ func main() {
 
 	// TODO: Register our Callback function for the MultiCam asynchronous signals.
 	// status = McRegisterCallback(hChannel, McCallback, NULL);
+	ch.RegisterCallback(cbhandler)
 
-	// TODO: Enable the signals we need:
 	// MC_SIG_SURFACE_PROCESSING: acquisition done and locked for processing
 	// MC_SIG_ACQUISITION_FAILURE: acquisition failed.
-	// status = McSetParamInt(hChannel, MC_SignalEnable + MC_SIG_SURFACE_PROCESSING, MC_SignalEnable_ON);
+	if err := ch.SetParamInt(mc.SignalEnableParam+mc.SurfaceProcessingSignal, mc.SignalEnableOn); err != nil {
+		fmt.Println(err)
+		return
+	}
 
-	// status = McSetParamInt(hChannel, MC_SignalEnable + MC_SIG_ACQUISITION_FAILURE, MC_SignalEnable_ON);
+	if err := ch.SetParamInt(mc.SignalEnableParam+mc.AcquisitionFailureSignal, mc.SignalEnableOn); err != nil {
+		fmt.Println(err)
+		return
+	}
 
-	fmt.Println("Done.")
+	// Start Acquisitions for this channel.
+	// status = McSetParamInt(hChannel, MC_ChannelState, MC_ChannelState_ACTIVE);
+	if err := ch.SetParamInt(mc.ChannelStateParam, int(mc.ChannelStateActive)); err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer func() {
+		if err := ch.SetParamInt(mc.ChannelStateParam, int(mc.ChannelStateIdle)); err != nil {
+			fmt.Println(err)
+			return
+		}
+		fmt.Println("Done.")
+	}()
+
+	for {
+		time.Sleep(time.Second)
+	}
 }
 
 func SetupCamera() {
@@ -102,4 +125,8 @@ func SetupCamera() {
 		fmt.Println(err)
 		return
 	}
+}
+
+func cbhandler(info *mc.SignalInfo) {
+	fmt.Println("doing it")
 }
